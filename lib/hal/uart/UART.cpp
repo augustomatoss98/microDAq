@@ -7,7 +7,7 @@ void UART::init(uint32_t baud){
     UART::set_baudrate(baud);
 
     /* Enable receiver and transmitter pins*/
-    UCSR0B = (1<<RXEN0) | (1<<TXEN0);
+    UCSR0B = (1<<RXEN0) | (1<<TXEN0) | (1<<RXCIE0);
 
     /* Set frame format: 8-bit data, 1 stop-bit, no parity*/
     UCSR0C = (3<<UCSZ00);

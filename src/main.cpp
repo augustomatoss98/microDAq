@@ -3,21 +3,19 @@
 
 int main() {
 
-    UART::init(9600);
+    UART::init(115200);
 
-    const char* msg = "microDAQ UART OK\n";
+    const char* msg = "microDAQ UART OK\r\n";
 	
 
     while (1) {
 
-        UART::write((const uint8_t*)msg, 17);
+        UART::write((const uint8_t*)msg, 18);
+		_delay_ms(1000);
 
         if (UART::is_available()) {
-            // uint8_t c = UART::read();
-            // UART::write(c); // echo
-			const char* msg2 = "Is available\n";
-			UART::write((const uint8_t*)msg2, 13);
-			_delay_ms(1000);
+            uint8_t c = UART::read();
+            UART::write(c); // echo
         }
     }
 }
