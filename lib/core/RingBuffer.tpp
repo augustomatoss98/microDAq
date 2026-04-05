@@ -43,12 +43,12 @@ bool RingBuffer<T,size>::peek_at(size_t idx, T& data){
 }
 
 template<typename T, size_t size>
-bool RingBuffer<T, size>::is_full(){
+bool RingBuffer<T, size>::is_full() const{
     return (this->head + 1) % size == this->tail;
 
 }
 
 template<typename T, size_t size>
-bool RingBuffer<T,size>::is_empty(){
+bool RingBuffer<T,size>::is_empty() const{
     return this->head == this->tail;
 }
