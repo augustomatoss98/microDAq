@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "RingBuffer.h"
+#include "RingBuffer/RingBuffer.h"
 
 RingBuffer<uint8_t, 4> buffer;
 

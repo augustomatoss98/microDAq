@@ -7,7 +7,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include "RingBuffer.h" 
+#include "RingBuffer/RingBuffer.h" 
 
 #define F_CPU 16000000UL
 
