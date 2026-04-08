@@ -27,7 +27,7 @@ void test_consistency(){
 
 void test_bit_flip(){
     uint8_t data1[] = {0xAA};
-    uint8_t data2[] = {0xAB}; // 1 bit diferente
+    uint8_t data2[] = {0xAB};
 
     uint8_t crc1 = crc8(data1, 1);
     uint8_t crc2 = crc8(data2, 1);
