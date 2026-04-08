@@ -1,5 +1,46 @@
 #include "Protocol.h"
 
+void Protocol::set_write_callback(WriteCallback cb){
+    this->write = cb;
+}
+
+
+void Protocol::send(Command cmd, const uint8_t* payload, uint8_t len){
+    if (!write) return;
+    if (len > MAX_PAYLOAD) return;
+    if (len == 0 && payload == nullptr) return;
+
+    const uint8_t STX = 0x02;
+    const uint8_t ETX = 0x03;
+
+    uint8_t seq = sequence++;
+
+    write(STX);
+    write(len);
+    write(seq);
+    write(static_cast<uint8_t>(cmd));
+
+    for (uint8_t i = 0; i < len; i++){
+        write(payload[i]);
+    }
+
+    uint8_t buffer[3 + MAX_PAYLOAD];
+    buffer[0] = len;
+    buffer[1] = seq;
+    buffer[2] = static_cast<uint8_t>(cmd);
+    
+    for (uint8_t i = 0; i < len; i++){
+        buffer[3 + i] = payload[i];
+    }
+
+    uint8_t crc = crc8(buffer, 3 + len);
+
+    write(crc);
+
+    write(ETX);
+}
+
+
 void Protocol::process(uint8_t byte){
 
     switch (this->parser.state) {
@@ -104,6 +145,4 @@ Protocol::Packet Protocol::get_packet(){
 bool Protocol::available() const{
     return this->packet_ready;
 }
-
-
 

@@ -22,13 +22,15 @@ public:
         uint8_t seq;
     };
 
+    using WriteCallback = void (*)(uint8_t);
+
     void process(uint8_t byte);
     bool available() const;
     Packet get_packet();
-    void send();
+    virtual void send(Command cmd, const uint8_t* payload, uint8_t len);
+    void set_write_callback(WriteCallback cb);
 
 private:
-
     struct Parser{
 
         enum class State {
@@ -60,7 +62,10 @@ private:
 
     uint8_t sequence = 0;
 
+    WriteCallback write = nullptr;
+
     void reset_parser();
     void handle_packet();
 };
+
 #endif
