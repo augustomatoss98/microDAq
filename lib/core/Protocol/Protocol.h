@@ -2,6 +2,8 @@
 #define PROTOCOL_H
 
 #include <stdint.h>
+#include <cstdio>
+#include "RingBuffer/RingBuffer.h"
 #include "crc/crc.h"
 
 #define MAX_PAYLOAD 32
@@ -12,23 +14,45 @@ public:
         READ    = 0x01,
         WRITE   = 0x02,
         STATUS  = 0x03,
-        PING    = 0x04
+        PING    = 0x04,
+
+        ACK     = 0xF0,
+        NACK    = 0xF1
+    };
+
+    enum class ErrorCode : uint8_t{
+        NONE            = 0x00,
+        INVALID_CRC     = 0x01,
+        INVALID_LENGTH  = 0x02,
+        UNKNOWN_COMMAND = 0x03,
+        INTERNAL_ERROR  = 0x04
     };
 
     struct Packet{
-        uint8_t cmd;
         uint8_t len;
-        uint8_t payload[MAX_PAYLOAD];
         uint8_t seq;
+        uint8_t cmd;
+        uint8_t payload[MAX_PAYLOAD];
     };
+
+    struct PendingTx {
+        uint8_t seq;
+        bool waiting_ack;
+    };
+
+    PendingTx pending_tx;
 
     using WriteCallback = void (*)(uint8_t);
 
     void process(uint8_t byte);
     bool available() const;
     Packet get_packet();
-    virtual void send(Command cmd, const uint8_t* payload, uint8_t len);
+    virtual void send_command(Command cmd, const uint8_t* payload, 
+                              uint8_t len);
     void set_write_callback(WriteCallback cb);
+    void send_ack(uint8_t seq);
+    void send_nack(uint8_t seq, ErrorCode err);
+    void flush_rx_queue();
 
 private:
     struct Parser{
@@ -45,27 +69,28 @@ private:
 
         State state = State::WAIT_STX;
 
-        uint8_t buffer[MAX_PAYLOAD];
+        Packet pkt;
+
         uint8_t idx = 0;
-
-        uint8_t len = 0;
-        uint8_t seq = 0;
-        uint8_t cmd = 0;
-
         uint8_t crc_received = 0;
     };
 
     Parser parser;
 
-    Packet current_packet;
-    bool packet_ready = false;
+    RingBuffer<Packet, 5> rx_queue;
 
-    uint8_t sequence = 0;
+    uint8_t tx_seq = 0;
 
     WriteCallback write = nullptr;
 
     void reset_parser();
-    void handle_packet();
+    bool queue_packet(const Packet& pkt);
+    void handle_control_packet(const Packet& pkt);
+
+    void send_frame(uint8_t seq, Command cmd, const uint8_t* payload,
+                    uint8_t len);
+
+    bool is_control_packet(const Packet& pkt);
 };
 
 #endif

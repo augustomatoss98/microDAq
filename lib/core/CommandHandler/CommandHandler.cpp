@@ -6,7 +6,7 @@ void CommandHandler::handle(const Protocol::Packet& pkt, Protocol& protocol) {
     switch (pkt.cmd) {
 
     case (int)Protocol::Command::PING: {
-        protocol.send(Protocol::Command::PING, nullptr, 0);
+        protocol.send_command(Protocol::Command::PING, nullptr, 0);
     }
 
         case (int)Protocol::Command::READ: {
@@ -21,7 +21,7 @@ void CommandHandler::handle(const Protocol::Packet& pkt, Protocol& protocol) {
         resp[1] = (value >> 8) & 0xFF;
         resp[2] = value & 0xFF;
 
-        protocol.send(Protocol::Command::READ, resp, 3);
+        protocol.send_command(Protocol::Command::READ, resp, 3);
         break;
     }
 
@@ -29,7 +29,7 @@ void CommandHandler::handle(const Protocol::Packet& pkt, Protocol& protocol) {
 
         uint8_t status = 0x00; // OK
 
-        protocol.send(Protocol::Command::STATUS, &status, 1);
+        protocol.send_command(Protocol::Command::STATUS, &status, 1);
         break;
     }
 

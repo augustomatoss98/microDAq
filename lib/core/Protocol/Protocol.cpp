@@ -5,15 +5,14 @@ void Protocol::set_write_callback(WriteCallback cb){
 }
 
 
-void Protocol::send(Command cmd, const uint8_t* payload, uint8_t len){
+void Protocol::send_frame(uint8_t seq, Command cmd, const uint8_t* payload, 
+                          uint8_t len){
     if (!write) return;
     if (len > MAX_PAYLOAD) return;
-    if (len == 0 && payload == nullptr) return;
+    if (len > 0 && payload == nullptr) return;
 
     const uint8_t STX = 0x02;
     const uint8_t ETX = 0x03;
-
-    uint8_t seq = sequence++;
 
     write(STX);
     write(len);
@@ -41,7 +40,21 @@ void Protocol::send(Command cmd, const uint8_t* payload, uint8_t len){
 }
 
 
+void Protocol::send_command(Command cmd, const uint8_t* payload, uint8_t len){
+    if (pending_tx.waiting_ack) return;
+
+    uint8_t seq = tx_seq++;
+
+    this->send_frame(seq, cmd, payload, len);
+
+    pending_tx.seq = seq;
+    pending_tx.waiting_ack = true;
+}
+
+
 void Protocol::process(uint8_t byte){
+
+    bool crc_ok = false;
 
     switch (this->parser.state) {
         
@@ -53,9 +66,9 @@ void Protocol::process(uint8_t byte){
         break;
 
     case Parser::State::READ_LEN:
-        this->parser.len = byte;
+        this->parser.pkt.len = byte;
 
-        if (this->parser.len > MAX_PAYLOAD) {
+        if (this->parser.pkt.len > MAX_PAYLOAD) {
             this->parser.state = Parser::State::WAIT_STX;
         } else {
             this->parser.state = Parser::State::READ_SEQ;
@@ -63,14 +76,14 @@ void Protocol::process(uint8_t byte){
         break;
 
     case Parser::State::READ_SEQ:
-        this->parser.seq = byte;
+        this->parser.pkt.seq = byte;
         this->parser.state = Parser::State::READ_CMD;
         break;
 
     case Parser::State::READ_CMD:
-        this->parser.cmd = byte;
+        this->parser.pkt.cmd = byte;
 
-        if (this->parser.len == 0)
+        if (this->parser.pkt.len == 0)
             this->parser.state = Parser::State::READ_CRC;
         else
             this->parser.state = Parser::State::READ_PAYLOAD;
@@ -78,9 +91,9 @@ void Protocol::process(uint8_t byte){
         break;
 
     case Parser::State::READ_PAYLOAD:
-        this->parser.buffer[this->parser.idx++] = byte;
+        this->parser.pkt.payload[this->parser.idx++] = byte;
 
-        if (this->parser.idx >= this->parser.len)
+        if (this->parser.idx >= this->parser.pkt.len)
             this->parser.state = Parser::State::READ_CRC;
 
         break;
@@ -91,58 +104,107 @@ void Protocol::process(uint8_t byte){
         break;
 
     case Parser::State::WAIT_ETX:
-        if (byte == 0x03) {
-
-            // valida CRC
-            uint8_t temp[64];
-            temp[0] = this->parser.len;
-            temp[1] = this->parser.seq;
-            temp[2] = this->parser.cmd;
-
-            for (uint8_t i = 0; i < this->parser.len; i++)
-                temp[3 + i] = this->parser.buffer[i];
-
-            uint8_t crc = crc8(temp, parser.len + 3);
-
-            if (crc == this->parser.crc_received) {
-                this->handle_packet();
-            }
+        if (byte != 0x03) {
+            this->reset_parser();
+            return;
         }
+
+        // valida CRC
+        uint8_t temp[MAX_PAYLOAD + 3];
+        temp[0] = this->parser.pkt.len;
+        temp[1] = this->parser.pkt.seq;
+        temp[2] = this->parser.pkt.cmd;
+
+        for (uint8_t i = 0; i < this->parser.pkt.len; i++)
+            temp[3 + i] = this->parser.pkt.payload[i];
+
+        uint8_t crc = crc8(temp, this->parser.pkt.len + 3);
+        crc_ok = (crc == this->parser.crc_received);
+
+        auto pkt = this->parser.pkt;
+        this->reset_parser();
+        
+        if (!crc_ok) {
+            this->send_nack(pkt.seq, ErrorCode::INVALID_CRC);
+            return;
+        } 
+
+        if (this->is_control_packet(pkt)){
+            this->handle_control_packet(pkt);
+            return;
+        }
+
+        this->send_ack(pkt.seq);
+        this->queue_packet(pkt);
+        
+        return;
     }
 }
 
 
-void Protocol::handle_packet(){
-    this->current_packet.len = this->parser.len;
-    this->current_packet.cmd = this->parser.cmd;
-    this->current_packet.seq = this->parser.seq;
-
-    for (uint8_t i = 0; i < this->parser.len; i++){
-        this->current_packet.payload[i] = this->parser.buffer[i];
+bool Protocol::queue_packet(const Packet& p){
+    if (this->rx_queue.is_full()) {
+        return false;
     }
-    
-    this->packet_ready = true;
-    this->reset_parser();
+
+    this->rx_queue.push(p);
+    return true;
+}
+
+
+void Protocol::handle_control_packet(const Packet& pkt){
+    if (!pending_tx.waiting_ack) return;
+
+    if (pkt.seq != pending_tx.seq) return;
+
+    if (pkt.cmd == (uint8_t)Command::ACK) {
+        pending_tx.waiting_ack = false;
+    }else if (pkt.cmd == (uint8_t)Command::NACK){
+        pending_tx.waiting_ack = false;
+    }
 }
 
 
 void Protocol::reset_parser(){
     this->parser.state = Parser::State::WAIT_STX;
+    this->parser.pkt = {};
     this->parser.idx = 0;
-    this->parser.len = 0;
-    this->parser.seq = 0;
-    this->parser.cmd = 0;
     this->parser.crc_received = 0;
 }
 
 
+void Protocol::send_ack(uint8_t seq){
+    send_frame(seq, Command::ACK, nullptr, 0);
+}
+
+
+void Protocol::send_nack(uint8_t seq, ErrorCode err) {
+    uint8_t payload[1] = {static_cast<uint8_t>(err)};
+    send_frame(seq, Command::NACK, payload, 1);
+}
+
+
 Protocol::Packet Protocol::get_packet(){
-    this->packet_ready = false;
-    return this->current_packet;
+    Packet pkt;
+
+    if (this->rx_queue.pop(pkt)){
+        return pkt;
+    };
+    
+    return {};
 }
 
 
 bool Protocol::available() const{
-    return this->packet_ready;
+    return !this->rx_queue.is_empty();
 }
 
+
+bool Protocol::is_control_packet(const Packet& pkt){
+    return (pkt.cmd == (uint8_t)Command::ACK || pkt.cmd == (uint8_t)Command::NACK);
+}
+
+
+void Protocol::flush_rx_queue(){
+    this->rx_queue.flush();
+}

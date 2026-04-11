@@ -21,6 +21,7 @@ private:
     size_t head;
     size_t tail;
     T buffer[size];
+    size_t count;
 };
 
 #include "RingBuffer.tpp"

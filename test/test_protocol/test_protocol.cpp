@@ -1,10 +1,22 @@
 #include <unity.h>
-#include "Protocol/Protocol.h"
 #include <cstdio>
+#include <algorithm>
+#include <vector>
+#include "Protocol/Protocol.h"
 
 Protocol protocol;
+std::vector<uint8_t> tx_buffer;
 
-void setUp(){};
+
+void write_mock(uint8_t byte){
+    tx_buffer.push_back(byte);
+}
+
+void setUp(){
+    protocol.set_write_callback(write_mock);
+    protocol.flush_rx_queue();
+    tx_buffer.clear();
+};
 
 void tearDown(){};
 
@@ -13,6 +25,7 @@ void feed_bytes(const uint8_t* data, size_t len) {
         protocol.process(data[i]);
     }
 }
+
 
 void test_valid_frame(){
     uint8_t payload[] = {0xAA, 0xBB};
@@ -41,6 +54,8 @@ void test_valid_frame(){
 
     TEST_ASSERT_EQUAL_UINT8(0xAA, pkt.payload[0]);
     TEST_ASSERT_EQUAL_UINT8(0xBB, pkt.payload[1]);
+
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)Protocol::Command::ACK, tx_buffer[3]);
 }
 
 
@@ -119,16 +134,93 @@ void test_invalid_len(){
 void test_invalid_crc(){
     uint8_t frame[] = {
         0x02,
-        100, // maior que MAX_PAYLOAD
         0x01,
         0x01,
+        0x01,
+        0x01,
+        0x00,
         0x03
     };
 
     feed_bytes(frame, sizeof(frame));
 
     TEST_ASSERT_FALSE(protocol.available());
+    
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)Protocol::Command::NACK, tx_buffer[3]);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)Protocol::ErrorCode::INVALID_CRC, tx_buffer[4]);
 }
+
+
+void test_control_packet(){
+uint8_t frame[] = {
+        0x02,
+        0x00,
+        0x01,
+        0xF0,
+        0x00,
+        0x03
+    };
+
+    frame[4] = crc8(&frame[1], 3);
+    feed_bytes(frame, sizeof(frame));
+
+    TEST_ASSERT_FALSE(protocol.pending_tx.waiting_ack);
+
+}
+
+
+void test_payload_zero(){
+    uint8_t frame[] = {
+        0x02,
+        0x00,
+        0x01,
+        0x04,
+        0x00,
+        0x03
+    };
+
+    frame[4] = crc8(&frame[1], 3);
+    feed_bytes(frame, sizeof(frame));
+    
+    TEST_ASSERT_TRUE(protocol.available());
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)Protocol::Command::ACK, tx_buffer[3]);
+}
+
+
+void test_buffer_overflow(){    
+    uint8_t pkt_count = 0;
+    uint8_t ack_count = 0;
+    
+    uint8_t frame[] = {
+        0x02,
+        0x00,
+        0x01,
+        0x04,
+        0x00,
+        0x03
+    };
+
+    for (uint8_t i = 0; i < 10; i++){
+        frame[2] = i + 1;
+        frame[4] = crc8(&frame[1], 3);
+        feed_bytes(frame, sizeof(frame));
+    }
+
+    while(protocol.available()){
+        auto pkt = protocol.get_packet();
+        pkt_count++;
+    }
+
+    for (size_t i = 0; i < tx_buffer.size(); i ++) {
+        if (tx_buffer[i] == static_cast<uint8_t>(Protocol::Command::ACK)) {
+            ack_count++;
+        }   
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(pkt_count, 5);
+    TEST_ASSERT_EQUAL(ack_count, 10);
+}
+
 
 int main() {
     UNITY_BEGIN();
@@ -139,6 +231,9 @@ int main() {
     RUN_TEST(test_invalid_etx);
     RUN_TEST(test_resync_after_noise);
     RUN_TEST(test_multiple_frames);
+    RUN_TEST(test_control_packet);
+    RUN_TEST(test_payload_zero);
+    RUN_TEST(test_buffer_overflow);
     
     return UNITY_END();
 }

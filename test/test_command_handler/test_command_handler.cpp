@@ -11,7 +11,7 @@ public:
     uint8_t last_len = 0;
     bool called = false;
 
-    void send(Command cmd, const uint8_t* payload, uint8_t len) override {
+    void send_command(Command cmd, const uint8_t* payload, uint8_t len) override {
         called = true;
         last_cmd = cmd;
         last_len = len;
