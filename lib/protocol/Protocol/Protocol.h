@@ -4,12 +4,16 @@
 #include <stdint.h>
 #include <cstdio>
 #include "RingBuffer/RingBuffer.h"
+#include "SystemTime/SystemTime.h"
 #include "crc/crc.h"
-
-#define MAX_PAYLOAD 32
 
 class Protocol{
 public:
+
+    static constexpr uint8_t MAX_PAYLOAD = 32;
+    static constexpr uint8_t ACK_TIMEOUT_MS = 50;
+    static constexpr uint8_t MAX_RETRIES = 2;
+
     enum class Command : uint8_t {
         READ    = 0x01,
         WRITE   = 0x02,
@@ -38,9 +42,16 @@ public:
     struct PendingTx {
         uint8_t seq;
         bool waiting_ack;
+
+        uint8_t retry_count;
+        uint32_t timestamp_ms;
+
+        uint8_t buffer[MAX_PAYLOAD];
+        uint8_t len;
+        Command cmd;
     };
 
-    PendingTx pending_tx;
+    PendingTx tx;
 
     using WriteCallback = void (*)(uint8_t);
 
@@ -53,6 +64,7 @@ public:
     void send_ack(uint8_t seq);
     void send_nack(uint8_t seq, ErrorCode err);
     void flush_rx_queue();
+    void update();
 
 private:
     struct Parser{

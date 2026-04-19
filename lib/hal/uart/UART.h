@@ -9,8 +9,6 @@
 
 #include "RingBuffer/RingBuffer.h" 
 
-#define F_CPU 16000000UL
-
 class UART{
 public:
     static void init(uint32_t baud);

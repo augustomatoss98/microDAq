@@ -41,14 +41,24 @@ void Protocol::send_frame(uint8_t seq, Command cmd, const uint8_t* payload,
 
 
 void Protocol::send_command(Command cmd, const uint8_t* payload, uint8_t len){
-    if (pending_tx.waiting_ack) return;
+    if (this->tx.waiting_ack) return;
 
     uint8_t seq = tx_seq++;
 
     this->send_frame(seq, cmd, payload, len);
 
-    pending_tx.seq = seq;
-    pending_tx.waiting_ack = true;
+    this->tx.seq = seq;
+    this->tx.cmd = cmd;
+    this->tx.len = len;
+
+    for (size_t i = 0; i < len; i++){
+        this->tx.buffer[i] = payload[i];
+    }
+    
+
+    this->tx.retry_count = 0;
+    this->tx.waiting_ack = true;
+    this->tx.timestamp_ms = SystemTime::millis();
 }
 
 
@@ -142,6 +152,24 @@ void Protocol::process(uint8_t byte){
 }
 
 
+void Protocol::update(){
+    if (!this->tx.waiting_ack) return;
+
+    if (SystemTime::millis() - this->tx.timestamp_ms >= 
+            Protocol::ACK_TIMEOUT_MS){
+        if (this->tx.retry_count < Protocol::MAX_RETRIES){
+            this->send_frame(this->tx.seq, this->tx.cmd,
+                             this->tx.buffer, this->tx.len);
+
+            this->tx.retry_count++;
+            this->tx.timestamp_ms = SystemTime::millis();
+        }else{
+            tx.waiting_ack = false;
+        }
+    }
+}
+
+
 bool Protocol::queue_packet(const Packet& p){
     if (this->rx_queue.is_full()) {
         return false;
@@ -153,14 +181,14 @@ bool Protocol::queue_packet(const Packet& p){
 
 
 void Protocol::handle_control_packet(const Packet& pkt){
-    if (!pending_tx.waiting_ack) return;
+    if (!this->tx.waiting_ack) return;
 
-    if (pkt.seq != pending_tx.seq) return;
+    if (pkt.seq != this->tx.seq) return;
 
     if (pkt.cmd == (uint8_t)Command::ACK) {
-        pending_tx.waiting_ack = false;
+        this->tx.waiting_ack = false;
     }else if (pkt.cmd == (uint8_t)Command::NACK){
-        pending_tx.waiting_ack = false;
+        this->tx.timestamp_ms = 0;
     }
 }
 

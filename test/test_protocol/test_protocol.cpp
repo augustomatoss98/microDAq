@@ -5,20 +5,43 @@
 #include "Protocol/Protocol.h"
 
 Protocol protocol;
-std::vector<uint8_t> tx_buffer;
+static std::vector<uint8_t> tx_buffer;
+static std::vector<std::vector<uint8_t>> tx_frames;
 
+static uint32_t fake_time = 0;
 
-void write_mock(uint8_t byte){
-    tx_buffer.push_back(byte);
+uint32_t SystemTime::millis(){
+    return fake_time;
 }
 
-void setUp(){
-    protocol.set_write_callback(write_mock);
-    protocol.flush_rx_queue();
-    tx_buffer.clear();
-};
+void advance(uint32_t ms){
+    fake_time += ms;
+}
 
-void tearDown(){};
+void reset(){
+    fake_time = 0;
+}
+
+
+void print_frames(){
+    for (size_t i = 0; i < tx_frames.size(); i++){
+        printf("Frame %d:", i);
+        for(uint8_t byte : tx_frames[i]){
+            printf(" %02x", byte);
+        }
+        printf("\n");
+    }
+}
+
+void write_mock(uint8_t b) {
+    tx_buffer.push_back(b);
+
+    // detectar fim de frame (ETX = 0x03)
+    if (b == 0x03) {
+        tx_frames.push_back(tx_buffer);
+        tx_buffer.clear();
+    }
+}
 
 void feed_bytes(const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; i++){
@@ -26,6 +49,17 @@ void feed_bytes(const uint8_t* data, size_t len) {
     }
 }
 
+
+void setUp(){
+    protocol.set_write_callback(write_mock);
+    protocol.flush_rx_queue();
+    protocol.tx = Protocol::PendingTx{};
+    tx_buffer.clear();
+    tx_frames.clear();
+    reset();
+};
+
+void tearDown(){};
 
 void test_valid_frame(){
     uint8_t payload[] = {0xAA, 0xBB};
@@ -56,6 +90,8 @@ void test_valid_frame(){
     TEST_ASSERT_EQUAL_UINT8(0xBB, pkt.payload[1]);
 
     TEST_ASSERT_EQUAL_UINT8((uint8_t)Protocol::Command::ACK, tx_buffer[3]);
+
+
 }
 
 
@@ -164,7 +200,7 @@ uint8_t frame[] = {
     frame[4] = crc8(&frame[1], 3);
     feed_bytes(frame, sizeof(frame));
 
-    TEST_ASSERT_FALSE(protocol.pending_tx.waiting_ack);
+    TEST_ASSERT_FALSE(protocol.tx.waiting_ack);
 
 }
 
@@ -211,16 +247,110 @@ void test_buffer_overflow(){
         pkt_count++;
     }
 
-    for (size_t i = 0; i < tx_buffer.size(); i ++) {
-        if (tx_buffer[i] == static_cast<uint8_t>(Protocol::Command::ACK)) {
+    for (size_t i = 0; i < tx_frames.size(); i ++) {
+        for (uint8_t byte : tx_frames[i]){
+            if (byte == static_cast<uint8_t>(Protocol::Command::ACK)) {
             ack_count++;
-        }   
+            }   
+        }
     }
 
     TEST_ASSERT_EQUAL_UINT8(pkt_count, 5);
     TEST_ASSERT_EQUAL(ack_count, 10);
 }
 
+
+void test_retry_limit(){
+    protocol.send_command(Protocol::Command::PING, nullptr, 0);
+
+    TEST_ASSERT_EQUAL(1, tx_frames.size());
+
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    TEST_ASSERT_EQUAL(2, tx_frames.size());
+    TEST_ASSERT_EQUAL(1, protocol.tx.retry_count);
+
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    TEST_ASSERT_EQUAL(3, tx_frames.size());
+    TEST_ASSERT_EQUAL(2, protocol.tx.retry_count);
+
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    TEST_ASSERT_EQUAL(3, tx_frames.size());
+    TEST_ASSERT_FALSE(protocol.tx.waiting_ack);
+}
+
+
+void test_retry_same_frame() {
+    protocol.send_command(Protocol::Command::PING, nullptr, 0);
+
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    // compara frame 0, 1 e 2
+    TEST_ASSERT_EQUAL_MEMORY(
+        tx_frames[0].data(), tx_frames[1].data(), tx_frames[0].size()
+    );
+
+    TEST_ASSERT_EQUAL_MEMORY(
+        tx_frames[1].data(), tx_frames[2].data(), tx_frames[1].size()
+    );
+}
+
+
+void test_ack_stops_retry() {
+    protocol.send_command(Protocol::Command::PING, nullptr, 0);
+
+    uint8_t frame[] = {
+        0x02,
+        0x00,
+        0x01,
+        0xF0,
+        0x00,
+        0x03
+    };
+
+    frame[2] = protocol.tx.seq;
+    frame[4] = crc8(&frame[1], 3);
+    feed_bytes(frame, sizeof(frame));
+
+    // ⏱️ avança tempo
+    advance(Protocol::ACK_TIMEOUT_MS);
+    protocol.update();
+
+    // ❗ não deve retransmitir
+    TEST_ASSERT_EQUAL(1, tx_frames.size());
+    TEST_ASSERT_FALSE(protocol.tx.waiting_ack);
+}
+
+void test_nack_triggers_retry() {
+    protocol.send_command(Protocol::Command::PING, nullptr, 0);
+
+    uint8_t frame[] = {
+        0x02,
+        0x00,
+        0x01,
+        0xF0,
+        0x00,
+        0x03
+    };
+
+    frame[2] = protocol.tx.seq;
+    frame[4] = crc8(&frame[1], 3);
+    feed_bytes(frame, sizeof(frame));    
+
+    protocol.update();
+
+    // retry imediato
+    TEST_ASSERT_EQUAL(2, tx_frames.size());
+}
 
 int main() {
     UNITY_BEGIN();
@@ -234,6 +364,10 @@ int main() {
     RUN_TEST(test_control_packet);
     RUN_TEST(test_payload_zero);
     RUN_TEST(test_buffer_overflow);
+    RUN_TEST(test_retry_limit);
+    RUN_TEST(test_retry_same_frame);
+    RUN_TEST(test_ack_stops_retry);
+    RUN_TEST(test_nack_triggers_retry);
     
     return UNITY_END();
 }
