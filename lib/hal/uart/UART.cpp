@@ -3,6 +3,7 @@
 RingBuffer<uint8_t, 64> UART::tx_buffer;
 RingBuffer<uint8_t, 64> UART::rx_buffer;
 
+
 void UART::init(uint32_t baud){    
     UART::set_baudrate(baud);
 
@@ -16,18 +17,22 @@ void UART::init(uint32_t baud){
     sei();
 }
 
+
 bool UART::write(uint8_t data){
     bool ret;
 
+    // Push the data atomically to avoid data race condition
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
         ret = UART::tx_buffer.push(data);
     }
 
     if(!ret) return false;
 
+    // Enable the transmit interrupt to start sending data
     UART::enable_tx_interrupt();
     return true;
 }
+
 
 bool UART::write(const uint8_t* data, size_t len){
     for(size_t i = 0; i < len; i++){
@@ -36,6 +41,7 @@ bool UART::write(const uint8_t* data, size_t len){
 
     return true;
 }
+
 
 uint8_t UART::read(){
     uint8_t data = 0;
@@ -76,10 +82,15 @@ void UART::enable_tx_interrupt(){
     UCSR0B |= (1 << UDRIE0);
 }
 
+
 bool UART::is_available(){
     return !UART::rx_buffer.is_empty();
 }
 
+/** @brief Interrupt service routine for UART data register empty
+ * 
+ * This function is called when the UART transmit buffer is empty and data can be sent.
+ */
 ISR(USART_UDRE_vect){
     uint8_t data;
 
@@ -91,7 +102,10 @@ ISR(USART_UDRE_vect){
     UDR0 = data;
 }
 
-
+/** @brief Interrupt service routine for UART receive complete
+ * 
+ * This function is called when data is received via the UART.
+ */
 ISR(USART_RX_vect){
     uint8_t data = UDR0;
     UART::rx_buffer.push(data);

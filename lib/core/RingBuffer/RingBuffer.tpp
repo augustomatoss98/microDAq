@@ -1,11 +1,13 @@
 #include "RingBuffer.h"
 
+
 template<typename T, size_t size>
 RingBuffer<T,size>::RingBuffer(){
     this->tail = 0;
     this->head = 0;
     this->count = 0;
 }
+
 
 template<typename T, size_t size>
 bool RingBuffer<T, size>::push(T data){
@@ -19,6 +21,7 @@ bool RingBuffer<T, size>::push(T data){
     return true;
 }
 
+
 template<typename T, size_t size>
 bool RingBuffer<T, size>::pop(T& data){
     if(this->is_empty()) return false;
@@ -29,6 +32,7 @@ bool RingBuffer<T, size>::pop(T& data){
     return true;
 }
 
+
 template<typename T, size_t size>
 bool RingBuffer<T,size>::flush(){
     if(this->is_empty()) return false;
@@ -38,6 +42,7 @@ bool RingBuffer<T,size>::flush(){
     return true;
 }
 
+
 template<typename T, size_t size>
 bool RingBuffer<T,size>::peek_at(size_t idx, T& data){
     if(this->is_empty()) return false;
@@ -46,11 +51,13 @@ bool RingBuffer<T,size>::peek_at(size_t idx, T& data){
     return true;
 }
 
+
 template<typename T, size_t size>
 bool RingBuffer<T, size>::is_full() const{
     return  this->count == size;
 
 }
+
 
 template<typename T, size_t size>
 bool RingBuffer<T,size>::is_empty() const{
