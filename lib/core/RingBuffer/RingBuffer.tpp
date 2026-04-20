@@ -11,8 +11,9 @@ RingBuffer<T,size>::RingBuffer(){
 
 template<typename T, size_t size>
 bool RingBuffer<T, size>::push(T data){
-    if(this->is_full()) return false;
+    if(this->is_full()) return false;   // Buffer is full, cannot push new data
 
+    // Add new data at the head index and update head and count
     size_t next = (this->head + 1) % size;
     this->buffer[head] = data;
     head = next;
@@ -24,8 +25,9 @@ bool RingBuffer<T, size>::push(T data){
 
 template<typename T, size_t size>
 bool RingBuffer<T, size>::pop(T& data){
-    if(this->is_empty()) return false;
-
+    if(this->is_empty()) return false;  // Buffer is empty, cannot pop data
+    
+    // Retrieve data at the tail index and update tail and count
     data = buffer[tail];
     tail = (tail + 1) % size;
     count--;
@@ -35,8 +37,9 @@ bool RingBuffer<T, size>::pop(T& data){
 
 template<typename T, size_t size>
 bool RingBuffer<T,size>::flush(){
-    if(this->is_empty()) return false;
+    if(this->is_empty()) return false; // Buffer is already empty, nothing to flush
 
+    // Reset head and tail indices and count to clear the buffer
     head = tail = 0;
     count = 0;
     return true;
@@ -45,7 +48,7 @@ bool RingBuffer<T,size>::flush(){
 
 template<typename T, size_t size>
 bool RingBuffer<T,size>::peek_at(size_t idx, T& data){
-    if(this->is_empty()) return false;
+    if(this->is_empty()) return false;  // Buffer is empty, cannot peek data
 
     data = buffer[idx];
     return true;

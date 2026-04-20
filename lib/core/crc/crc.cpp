@@ -1,8 +1,9 @@
 #include "crc.h"
 
 uint8_t crc8(const uint8_t* data, size_t len){
-    uint8_t crc = 0x00;
+    uint8_t crc = 0x00; // Initial CRC value
 
+    // Process each byte in the input data
     for (size_t i = 0; i < len; i++){
         crc ^= data[i];
 

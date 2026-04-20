@@ -1,7 +1,7 @@
 #include "SystemTime.h"
 
 namespace {
-    volatile uint32_t time_ms = 0;
+    volatile uint64_t time_ms = 0;
 }
 
 void SystemTime::init(){
