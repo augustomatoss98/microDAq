@@ -1,5 +1,4 @@
-#ifndef UART_H
-#define UART_H
+#pragma once
 
 #include <stdint.h>
 #include <util/atomic.h>
@@ -107,5 +106,3 @@ private:
      */
     static void enable_tx_interrupt();
 };
-
-#endif

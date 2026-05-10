@@ -39,8 +39,9 @@ public:
  */
 class FakeSensorManager : public SensorManager {
 public:
-    uint16_t read(uint8_t sensor_id) override {
-        return 0x1234 + sensor_id;
+    bool read(uint8_t sensor_id, SensorSample& sample) override {
+        sample.value = 0x1234 + sensor_id;
+        return true;
     };
 };
 
@@ -69,6 +70,7 @@ void tearDown(){};
  */
 void test_read_command(){
     // Generates test packet
+    SensorSample sample;
     Protocol::Packet pkt;
     pkt.cmd = (uint8_t)Protocol::Command::READ;
     pkt.len = 1;
