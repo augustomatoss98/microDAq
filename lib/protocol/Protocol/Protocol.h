@@ -2,7 +2,6 @@
 #define PROTOCOL_H
 
 #include <stdint.h>
-#include <cstdio>
 
 #include "RingBuffer/RingBuffer.h"
 #include "SystemTime/SystemTime.h"
@@ -61,8 +60,8 @@ public:
 
     // Pending transmission structure
     struct PendingTx {
-        uint8_t seq;
-        bool waiting_ack;
+        uint8_t seq = 0;
+        bool waiting_ack = false;
 
         uint8_t retry_count;
         uint32_t timestamp_ms;
@@ -73,7 +72,7 @@ public:
     };
 
     // Write callback type
-    using WriteCallback = void (*)(uint8_t);
+    using WriteCallback = bool (*)(uint8_t);
 
     /** 
      * @brief Process incoming byte

@@ -1,5 +1,5 @@
 #include "timer.h"
-
+#ifdef __AVR__
 void Timer::timer0_init(){
     // CTC mode
     TCCR0A = (1 << WGM01);
@@ -26,3 +26,11 @@ void Timer::timer0_init(){
 ISR(TIMER0_COMPA_vect) {
     SystemTime::tick();
 }
+
+#else
+
+void Timer::timer0_init(){
+    //NOP
+}
+
+#endif

@@ -38,7 +38,7 @@ void print_frames(){
 }
 
 // Mock write callback to capture transmitted bytes
-void write_mock(uint8_t b) {
+bool write_mock(uint8_t b) {
     tx_buffer.push_back(b);
 
     // ETX received, store the frame and clear buffer
@@ -46,6 +46,8 @@ void write_mock(uint8_t b) {
         tx_frames.push_back(tx_buffer);
         tx_buffer.clear();
     }
+
+    return true;
 }
 
 // Helper function to feed bytes into the protocol parser

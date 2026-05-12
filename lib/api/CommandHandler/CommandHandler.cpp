@@ -1,4 +1,5 @@
 #include "CommandHandler.h"
+#include <cstdio>
 
 CommandHandler::CommandHandler(SensorManager& sensor) : sensor(sensor){};
 
@@ -11,18 +12,24 @@ void CommandHandler::handle(const Protocol::Packet& pkt, Protocol& protocol) {
 
     case (int)Protocol::Command::READ: {
         SensorSample sample;
+        uint8_t sensor_id;
+        uint8_t resp[3*pkt.len];
 
-        if (pkt.len < 1) return; // validação básica
+        printf("%d\n", pkt.len);
+        printf("%d\n", sensor.MAX_SENSORS);
 
-        uint8_t sensor_id = pkt.payload[0];
-        sensor.read(sensor_id, sample);
+        if ((pkt.len < 1) || (pkt.len > sensor.MAX_SENSORS)) return; // validação básica
 
-        uint8_t resp[3];
-        resp[0] = sensor_id;
-        resp[1] = (sample.value >> 8) & 0xFF;
-        resp[2] = sample.value & 0xFF;
+        for(uint8_t i = 0; i < pkt.len; i++){
+            sensor_id = pkt.payload[i];
+            this->sensor.read(sensor_id, sample);
+            
+            resp[3*i] = sensor_id;
+            resp[3*i+1] = (sample.value >> 8) & 0xFF;
+            resp[3*i+2] = sample.value & 0xFF;
+        }
 
-        protocol.send_command(Protocol::Command::READ, resp, 3);
+        protocol.send_command(Protocol::Command::READ, resp, 3*pkt.len);
         break;
     }
 

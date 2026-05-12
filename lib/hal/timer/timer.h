@@ -1,12 +1,15 @@
-#ifndef TIMER_H
-#define TIMER_H
-
-#include <avr/io.h>
-#include <avr/interrupt.h>
+#pragma once
 
 #include <stdint.h>
 
 #include "SystemTime/SystemTime.h"
+
+
+#ifdef __AVR__
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
 
 /**
  * @brief Timer management for system timekeeping
@@ -24,6 +27,14 @@ namespace Timer{
     constexpr uint8_t SCALER = 64UL;
 };
 
+#else
 
+namespace Timer{
+    /** @brief Initialize Timer0 for system timekeeping */
+    void timer0_init();
+
+    constexpr uint16_t F_TIMER0 = 1000UL;
+    constexpr uint8_t SCALER = 64UL;
+};
 
 #endif

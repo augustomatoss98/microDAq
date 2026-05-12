@@ -9,13 +9,7 @@ bool MockSensor::init(){
 }
 
 bool MockSensor::update(){
-    constexpr float PI = 3.14159265f;
-    this->time = SystemTime::millis();
-    
-    this->sample.timestamp = time; 
-
-    this->sample.value = this->offset + this->amp*sinf(2.0*PI*freq*time);
-
+    sample.value++;
     return true;
 }
 

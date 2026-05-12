@@ -96,6 +96,55 @@ void test_read_command(){
     TEST_ASSERT_EQUAL_UINT8(expected & 0xFF, protocol.last_payload[2]);
 }
 
+void test_read_multiple_sensors(){
+    SensorSample sample;
+    Protocol::Packet pkt;
+    uint16_t expected1 = 0x1234 + 2;
+    uint16_t expected2 = 0x1234 + 3;
+
+    pkt.cmd = (uint8_t)Protocol::Command::READ;
+    pkt.len = 2;
+    pkt.payload[0] = 2;
+    pkt.payload[1] = 3;
+
+    // Calls the handler with the test packet
+    handler.handle(pkt, protocol);
+    
+    TEST_ASSERT_EQUAL_UINT8(6, protocol.last_len);
+
+    TEST_ASSERT_EQUAL_UINT8(2, protocol.last_payload[0]);
+    TEST_ASSERT_EQUAL_UINT8(expected1 >> 8, protocol.last_payload[1]);
+    TEST_ASSERT_EQUAL_UINT8(expected1 & 0xFF, protocol.last_payload[2]);
+
+    TEST_ASSERT_EQUAL_UINT8(3, protocol.last_payload[3]);
+    TEST_ASSERT_EQUAL_UINT8(expected2 >> 8, protocol.last_payload[4]);
+    TEST_ASSERT_EQUAL_UINT8(expected2 & 0xFF, protocol.last_payload[5]);
+}
+
+void test_read_more_than_max_sensors(){
+    Protocol::Packet pkt;
+    pkt.cmd = (uint8_t)Protocol::Command::READ;
+    pkt.len = 9;
+
+    // Calls the handler with the test packet
+    handler.handle(pkt, protocol);
+
+    // Assertions
+    TEST_ASSERT_FALSE(protocol.called);
+}
+
+void test_read_no_sensors(){
+    Protocol::Packet pkt;
+    pkt.cmd = (uint8_t)Protocol::Command::READ;
+    pkt.len = 0;
+
+     // Calls the handler with the test packet
+    handler.handle(pkt, protocol);
+
+    // Assertions
+    TEST_ASSERT_FALSE(protocol.called);
+}
+
 /**
  * Test handling of PING command
  * 
@@ -146,6 +195,9 @@ int main(){
     UNITY_BEGIN();
 
     RUN_TEST(test_read_command);
+    RUN_TEST(test_read_multiple_sensors);
+    RUN_TEST(test_read_more_than_max_sensors);
+    RUN_TEST(test_read_no_sensors);
     RUN_TEST(test_ping_command);
     RUN_TEST(test_read_invalid_len);
 

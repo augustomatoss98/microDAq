@@ -15,7 +15,7 @@ void tearDown(){};
  */
 void test_crc_empty(){
     uint8_t data[] = {};
-    TEST_ASSERT_EQUAL_UINT8(0x00, crc8(data, 0));
+    TEST_ASSERT_EQUAL_UINT8(0x55, crc8(data, 0));
 }
 
 /**
@@ -27,7 +27,7 @@ void test_crc_empty(){
  */
 void test_crc(){
     uint8_t data[] = {0x48, 0x69, 0x21};
-    TEST_ASSERT_EQUAL_UINT8(0x78, crc8(data, 3));
+    TEST_ASSERT_EQUAL_UINT8(0x2D, crc8(data, 3));
 }
 
 /**

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <util/atomic.h>
+#include <Utils/Atomic.h>
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -53,7 +53,7 @@ public:
      * @return true if the data was successfully written, false 
      * otherwise
      */
-    static bool write(const uint8_t* data, size_t len);
+    static bool write_bytes(const uint8_t* data, size_t len);
 
     /** 
      * @brief Checks if data is available in the receive buffer
